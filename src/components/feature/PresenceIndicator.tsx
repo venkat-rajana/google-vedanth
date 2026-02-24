@@ -7,14 +7,22 @@ import { cn } from '../../lib/utils';
 interface PresenceIndicatorProps {
   doctorId: string;
   className?: string;
+  isEditable?: boolean;
 }
 
-export function PresenceIndicator({ doctorId, className }: PresenceIndicatorProps) {
+export function PresenceIndicator({ doctorId, className, isEditable = false }: PresenceIndicatorProps) {
   const [presence, setPresence] = useState<DoctorPresence>(DoctorPresence.Offline);
+  const [manualPresence, setManualPresence] = useState<DoctorPresence | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const appointments = useDbStore(state => state.appointments);
 
   useEffect(() => {
+    if (manualPresence) {
+      setPresence(manualPresence);
+      setTimeLeft(null);
+      return;
+    }
+
     const calculatePresence = () => {
       const now = new Date();
       const todayStr = now.toISOString().split('T')[0];
@@ -49,7 +57,7 @@ export function PresenceIndicator({ doctorId, className }: PresenceIndicatorProp
     const interval = setInterval(calculatePresence, 60000); // Recalculate every minute
 
     return () => clearInterval(interval);
-  }, [doctorId, appointments]);
+  }, [doctorId, appointments, manualPresence]);
 
   return (
     <div className={cn("flex items-center gap-2", className)}>
@@ -63,15 +71,28 @@ export function PresenceIndicator({ doctorId, className }: PresenceIndicatorProp
             "bg-gray-400": presence === DoctorPresence.Offline,
           }
         )} />
-        {presence === DoctorPresence.InSession && (
+        {presence === DoctorPresence.InSession && !manualPresence && (
           <div className="absolute w-full h-full rounded-full bg-yellow-500 animate-ping opacity-75" />
         )}
       </div>
-      <span className="text-xs font-medium text-gray-600">
-        {presence === DoctorPresence.InSession && timeLeft !== null
-          ? `Busy · ${timeLeft} min left`
-          : presence}
-      </span>
+      {isEditable ? (
+        <select
+          value={manualPresence || presence}
+          onChange={(e) => setManualPresence(e.target.value as DoctorPresence)}
+          className="text-xs font-medium text-gray-600 bg-transparent border-none focus:ring-0 p-0 cursor-pointer"
+        >
+          <option value={DoctorPresence.Available}>Available</option>
+          <option value={DoctorPresence.InSession}>In Session</option>
+          <option value={DoctorPresence.OnLeave}>On Leave</option>
+          <option value={DoctorPresence.Offline}>Offline</option>
+        </select>
+      ) : (
+        <span className="text-xs font-medium text-gray-600">
+          {presence === DoctorPresence.InSession && timeLeft !== null && !manualPresence
+            ? `Busy · ${timeLeft} min left`
+            : presence}
+        </span>
+      )}
     </div>
   );
 }

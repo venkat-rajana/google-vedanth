@@ -22,6 +22,9 @@ export function AdminDashboard() {
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isAppointmentsModalOpen, setIsAppointmentsModalOpen] = useState(false);
+  const [patientFilter, setPatientFilter] = useState<'all' | 'active'>('all');
+  const [staffFilter, setStaffFilter] = useState<'all' | 'active'>('all');
   const { toast } = useToast();
 
   const [newUser, setNewUser] = useState({
@@ -157,7 +160,10 @@ export function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
+        <Card 
+          className="cursor-pointer hover:shadow-md transition-shadow hover:border-teal-200" 
+          onClick={() => setIsAppointmentsModalOpen(true)}
+        >
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -174,7 +180,10 @@ export function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card 
+          className={`cursor-pointer hover:shadow-md transition-shadow ${patientFilter === 'active' ? 'border-blue-400 ring-1 ring-blue-400' : 'hover:border-blue-200'}`}
+          onClick={() => setPatientFilter(prev => prev === 'all' ? 'active' : 'all')}
+        >
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -187,7 +196,10 @@ export function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card 
+          className={`cursor-pointer hover:shadow-md transition-shadow ${staffFilter === 'active' ? 'border-purple-400 ring-1 ring-purple-400' : 'hover:border-purple-200'}`}
+          onClick={() => setStaffFilter(prev => prev === 'all' ? 'active' : 'all')}
+        >
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -225,7 +237,7 @@ export function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {users.filter(u => u.role === Role.Doctor || u.role === Role.Staff).map(u => (
+                  {users.filter(u => (u.role === Role.Doctor || u.role === Role.Staff) && (staffFilter === 'all' || (staffFilter === 'active' && u.isActive))).map(u => (
                     <tr key={u.id} className="bg-white hover:bg-gray-50">
                       <td className="px-4 py-3 font-medium text-gray-900">{u.name}</td>
                       <td className="px-4 py-3">
@@ -271,7 +283,7 @@ export function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {users.filter(u => u.role === Role.Patient).map(u => (
+                  {users.filter(u => u.role === Role.Patient && (patientFilter === 'all' || (patientFilter === 'active' && u.isActive))).map(u => (
                     <tr key={u.id} className="bg-white hover:bg-gray-50">
                       <td className="px-4 py-3 font-medium text-gray-900">{u.name}</td>
                       <td className="px-4 py-3 text-gray-500">{u.email}</td>
@@ -371,6 +383,33 @@ export function AdminDashboard() {
             <Button type="submit">Save Changes</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal isOpen={isAppointmentsModalOpen} onClose={() => setIsAppointmentsModalOpen(false)} title="Today's Appointments">
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+          {todayAppointments.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">No appointments today.</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {todayAppointments.map(apt => {
+                const patient = users.find(u => u.id === apt.patientId);
+                const doctor = users.find(u => u.id === apt.doctorId);
+                return (
+                  <div key={apt.id} className="py-3 flex justify-between items-center">
+                    <div>
+                      <p className="font-medium text-gray-900">{patient?.name}</p>
+                      <p className="text-sm text-gray-500">with Dr. {doctor?.name}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-gray-900">{apt.startTime}</p>
+                      <Badge variant={apt.status === AppointmentStatus.Completed ? 'success' : 'default'}>{apt.status}</Badge>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </Modal>
     </div>
   );
