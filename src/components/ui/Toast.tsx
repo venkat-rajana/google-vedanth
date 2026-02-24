@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 import { X, CheckCircle, AlertCircle, Info } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
-type ToastType = 'success' | 'error' | 'info';
+type ToastType = 'success' | 'error' | 'info' | 'warning';
 
 interface Toast {
   id: string;
@@ -40,12 +40,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 "bg-teal-600": t.type === 'success',
                 "bg-red-500": t.type === 'error',
                 "bg-blue-500": t.type === 'info',
+                "bg-orange-500": t.type === 'warning',
               }
             )}
           >
             {t.type === 'success' && <CheckCircle className="w-5 h-5" />}
             {t.type === 'error' && <AlertCircle className="w-5 h-5" />}
             {t.type === 'info' && <Info className="w-5 h-5" />}
+            {t.type === 'warning' && <AlertCircle className="w-5 h-5" />}
             <p className="text-sm font-medium">{t.message}</p>
             <button
               onClick={() => setToasts((prev) => prev.filter((toast) => toast.id !== t.id))}

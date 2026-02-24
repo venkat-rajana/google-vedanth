@@ -40,6 +40,9 @@ export const authService = {
     if (state.users.some(u => u.email === data.email)) {
       throw new Error('Email already in use');
     }
+    if (data.aadharNumber && state.users.some(u => u.aadharNumber === data.aadharNumber)) {
+      throw new Error('A patient with this Aadhar number already exists');
+    }
 
     const newUser: User = {
       ...data,

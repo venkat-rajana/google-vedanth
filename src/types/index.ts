@@ -35,6 +35,7 @@ export interface User {
   specialization?: string; // For Doctors
   phone?: string;
   address?: string;
+  aadharNumber?: string;
   createdAt: string;
   isActive: boolean;
   password?: string; // Hashed in a real app

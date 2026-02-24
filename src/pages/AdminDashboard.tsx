@@ -20,6 +20,8 @@ export function AdminDashboard() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const { toast } = useToast();
 
   const [newUser, setNewUser] = useState({
@@ -27,6 +29,15 @@ export function AdminDashboard() {
     email: '',
     password: '',
     role: Role.Doctor,
+    specialization: ''
+  });
+
+  const [editUserData, setEditUserData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    aadharNumber: '',
     specialization: ''
   });
 
@@ -87,6 +98,34 @@ export function AdminDashboard() {
       toast('User deactivated', 'success');
     } catch (error) {
       toast('Failed to deactivate user', 'error');
+    }
+  };
+
+  const handleEditUser = (user: User) => {
+    setEditingUser(user);
+    setEditUserData({
+      name: user.name,
+      email: user.email,
+      phone: user.phone || '',
+      address: user.address || '',
+      aadharNumber: user.aadharNumber || '',
+      specialization: user.specialization || ''
+    });
+    setIsEditUserModalOpen(true);
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    
+    try {
+      const updatedUser = await userService.updateUser(editingUser.id, editUserData);
+      setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+      setIsEditUserModalOpen(false);
+      setEditingUser(null);
+      toast('User updated successfully', 'success');
+    } catch (error: any) {
+      toast(error.message || 'Failed to update user', 'error');
     }
   };
 
@@ -163,85 +202,99 @@ export function AdminDashboard() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Staff & Doctors</CardTitle>
-                <CardDescription>Manage clinic personnel</CardDescription>
-              </div>
-              <Button size="sm" onClick={() => setIsAddUserModalOpen(true)} className="flex items-center gap-2">
-                <UserPlus className="w-4 h-4" /> Add User
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-gray-500 uppercase bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3">Name</th>
-                      <th className="px-4 py-3">Role</th>
-                      <th className="px-4 py-3">Specialization</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3 text-right">Actions</th>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Staff & Doctors</CardTitle>
+              <CardDescription>Manage clinic personnel</CardDescription>
+            </div>
+            <Button size="sm" onClick={() => setIsAddUserModalOpen(true)} className="flex items-center gap-2">
+              <UserPlus className="w-4 h-4" /> Add User
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-gray-500 uppercase bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Role</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {users.filter(u => u.role === Role.Doctor || u.role === Role.Staff).map(u => (
+                    <tr key={u.id} className="bg-white hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">{u.name}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={u.role === Role.Doctor ? 'info' : 'secondary'}>{u.role}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant={u.isActive ? 'success' : 'outline'}>{u.isActive ? 'Active' : 'Inactive'}</Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button variant="ghost" size="sm" onClick={() => handleEditUser(u)} className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 mr-2">
+                          Edit
+                        </Button>
+                        {u.isActive && u.id !== user?.id && (
+                          <Button variant="ghost" size="sm" onClick={() => handleDeactivate(u.id)} className="text-red-600 hover:text-red-700 hover:bg-red-50">
+                            Deactivate
+                          </Button>
+                        )}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {users.filter(u => u.role === Role.Doctor || u.role === Role.Staff).map(u => (
-                      <tr key={u.id} className="bg-white hover:bg-gray-50">
-                        <td className="px-4 py-3 font-medium text-gray-900">{u.name}</td>
-                        <td className="px-4 py-3">
-                          <Badge variant={u.role === Role.Doctor ? 'info' : 'secondary'}>{u.role}</Badge>
-                        </td>
-                        <td className="px-4 py-3 text-gray-500">{u.specialization || '-'}</td>
-                        <td className="px-4 py-3">
-                          <Badge variant={u.isActive ? 'success' : 'outline'}>{u.isActive ? 'Active' : 'Inactive'}</Badge>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {u.isActive && u.id !== user?.id && (
-                            <Button variant="ghost" size="sm" onClick={() => handleDeactivate(u.id)} className="text-red-600 hover:text-red-700 hover:bg-red-50">
-                              Deactivate
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-        
-        <div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Appointments</CardTitle>
-              <CardDescription>Latest bookings</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {appointments.slice(0, 5).map(apt => {
-                  const patient = users.find(u => u.id === apt.patientId);
-                  const doctor = users.find(u => u.id === apt.doctorId);
-                  return (
-                    <div key={apt.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{patient?.name}</p>
-                        <p className="text-xs text-gray-500">with {doctor?.name}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-gray-900">{apt.date}</p>
-                        <Badge variant="outline" className="mt-1 text-[10px]">{apt.status}</Badge>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Patients</CardTitle>
+              <CardDescription>Manage patient records</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-gray-500 uppercase bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Email</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {users.filter(u => u.role === Role.Patient).map(u => (
+                    <tr key={u.id} className="bg-white hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">{u.name}</td>
+                      <td className="px-4 py-3 text-gray-500">{u.email}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={u.isActive ? 'success' : 'outline'}>{u.isActive ? 'Active' : 'Inactive'}</Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button variant="ghost" size="sm" onClick={() => handleEditUser(u)} className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 mr-2">
+                          Edit
+                        </Button>
+                        {u.isActive && (
+                          <Button variant="ghost" size="sm" onClick={() => handleDeactivate(u.id)} className="text-red-600 hover:text-red-700 hover:bg-red-50">
+                            Deactivate
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <AuditLogViewer />
@@ -280,6 +333,42 @@ export function AdminDashboard() {
           <div className="pt-4 flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setIsAddUserModalOpen(false)}>Cancel</Button>
             <Button type="submit">Add User</Button>
+          </div>
+        </form>
+      </Modal>
+      <Modal isOpen={isEditUserModalOpen} onClose={() => setIsEditUserModalOpen(false)} title="Edit User">
+        <form onSubmit={handleUpdateUser} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+            <Input required value={editUserData.name} onChange={(e) => setEditUserData({ ...editUserData, name: e.target.value })} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <Input type="email" required value={editUserData.email} onChange={(e) => setEditUserData({ ...editUserData, email: e.target.value })} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+            <Input type="tel" value={editUserData.phone} onChange={(e) => setEditUserData({ ...editUserData, phone: e.target.value })} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+            <Input type="text" value={editUserData.address} onChange={(e) => setEditUserData({ ...editUserData, address: e.target.value })} />
+          </div>
+          {editingUser?.role === Role.Patient && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Aadhar Number</label>
+              <Input type="text" value={editUserData.aadharNumber} onChange={(e) => setEditUserData({ ...editUserData, aadharNumber: e.target.value })} />
+            </div>
+          )}
+          {editingUser?.role === Role.Doctor && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Specialization</label>
+              <Input required value={editUserData.specialization} onChange={(e) => setEditUserData({ ...editUserData, specialization: e.target.value })} />
+            </div>
+          )}
+          <div className="pt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setIsEditUserModalOpen(false)}>Cancel</Button>
+            <Button type="submit">Save Changes</Button>
           </div>
         </form>
       </Modal>

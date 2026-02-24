@@ -31,6 +31,33 @@ export function StaffDashboard() {
   const [selectedSlot, setSelectedSlot] = useState<{ startTime: string; duration: number } | undefined>();
   const [appointmentType, setAppointmentType] = useState<AppointmentType>(AppointmentType.InPerson);
 
+  // New Patient State
+  const [isAddPatientModalOpen, setIsAddPatientModalOpen] = useState(false);
+  const [newPatientData, setNewPatientData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    aadharNumber: ''
+  });
+
+  // Edit Patient State
+  const [isEditPatientModalOpen, setIsEditPatientModalOpen] = useState(false);
+  const [editingPatient, setEditingPatient] = useState<User | null>(null);
+  const [editPatientData, setEditPatientData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    aadharNumber: ''
+  });
+
+  // Filter States
+  const [filterStartDate, setFilterStartDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [filterEndDate, setFilterEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [filterStatus, setFilterStatus] = useState<string>('active'); // 'all', 'active', or specific status
+  const [filterDoctorId, setFilterDoctorId] = useState<string>('all');
+  const [filterPatientId, setFilterPatientId] = useState<string>('all');
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -52,6 +79,61 @@ export function StaffDashboard() {
 
   const doctors = users.filter(u => u.role === Role.Doctor && u.isActive);
   const patients = users.filter(u => u.role === Role.Patient && u.isActive);
+
+  const handleAddPatient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPatientData.aadharNumber) {
+      toast('Aadhar number is mandatory', 'warning');
+      return;
+    }
+    try {
+      // Check if Aadhar already exists
+      if (patients.some(p => p.aadharNumber === newPatientData.aadharNumber)) {
+        toast('A patient with this Aadhar number already exists', 'error');
+        return;
+      }
+      
+      const addedPatient = await userService.addUser({
+        ...newPatientData,
+        role: Role.Patient,
+        password: 'Password@123', // Default password for walk-ins
+      });
+      setUsers(prev => [...prev, addedPatient]);
+      setSelectedPatientId(addedPatient.id);
+      setIsAddPatientModalOpen(false);
+      setNewPatientData({ name: '', email: '', phone: '', aadharNumber: '' });
+      toast('Patient registered successfully', 'success');
+    } catch (error: any) {
+      toast(error.message || 'Failed to register patient', 'error');
+    }
+  };
+
+  const handleEditPatient = (patient: User) => {
+    setEditingPatient(patient);
+    setEditPatientData({
+      name: patient.name,
+      email: patient.email,
+      phone: patient.phone || '',
+      address: patient.address || '',
+      aadharNumber: patient.aadharNumber || ''
+    });
+    setIsEditPatientModalOpen(true);
+  };
+
+  const handleUpdatePatient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPatient) return;
+    
+    try {
+      const updatedPatient = await userService.updateUser(editingPatient.id, editPatientData);
+      setUsers(prev => prev.map(u => u.id === updatedPatient.id ? updatedPatient : u));
+      setIsEditPatientModalOpen(false);
+      setEditingPatient(null);
+      toast('Patient updated successfully', 'success');
+    } catch (error: any) {
+      toast(error.message || 'Failed to update patient', 'error');
+    }
+  };
 
   const handleBookAppointment = async () => {
     if (!selectedDoctorId || !selectedPatientId || !selectedSlot) {
@@ -127,10 +209,28 @@ export function StaffDashboard() {
   }
 
   const today = new Date();
-  const todayStr = format(today, 'yyyy-MM-dd');
+  
   const queueAppointments = appointments
-    .filter(a => a.date === todayStr && a.status !== AppointmentStatus.Cancelled && a.status !== AppointmentStatus.Completed)
-    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+    .filter(a => {
+      // Date filter
+      if (a.date < filterStartDate || a.date > filterEndDate) return false;
+      
+      // Status filter
+      if (filterStatus === 'active') {
+        if (a.status === AppointmentStatus.Cancelled || a.status === AppointmentStatus.Completed) return false;
+      } else if (filterStatus !== 'all') {
+        if (a.status !== filterStatus) return false;
+      }
+      
+      // Doctor filter
+      if (filterDoctorId !== 'all' && a.doctorId !== filterDoctorId) return false;
+      
+      // Patient filter
+      if (filterPatientId !== 'all' && a.patientId !== filterPatientId) return false;
+      
+      return true;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
 
   return (
     <div className="space-y-6">
@@ -172,7 +272,57 @@ export function StaffDashboard() {
         <div className="p-6">
           {activeTab === 'queue' && (
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Appointments for {format(today, 'MMMM d, yyyy')}</h3>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Appointments</h3>
+                <div className="flex flex-wrap gap-2">
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm text-gray-500">From</span>
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      onChange={(e) => setFilterStartDate(e.target.value)}
+                      className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm text-gray-500">To</span>
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      onChange={(e) => setFilterEndDate(e.target.value)}
+                      className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="active">Active Queue</option>
+                    {Object.values(AppointmentStatus).map(status => (
+                      <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={filterDoctorId}
+                    onChange={(e) => setFilterDoctorId(e.target.value)}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value="all">All Doctors</option>
+                    {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                  <select
+                    value={filterPatientId}
+                    onChange={(e) => setFilterPatientId(e.target.value)}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:ring-2 focus:ring-teal-500 max-w-[150px]"
+                  >
+                    <option value="all">All Patients</option>
+                    {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              
               {queueAppointments.length === 0 ? (
                 <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-300">
                   <CheckCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -235,7 +385,19 @@ export function StaffDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-1 space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Patient</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">Select Patient</label>
+                    <div className="flex gap-2">
+                      {selectedPatientId && (
+                        <Button variant="link" size="sm" onClick={() => handleEditPatient(patients.find(p => p.id === selectedPatientId)!)} className="h-auto p-0 text-teal-600">
+                          Edit Patient
+                        </Button>
+                      )}
+                      <Button variant="link" size="sm" onClick={() => setIsAddPatientModalOpen(true)} className="h-auto p-0 text-teal-600">
+                        + Add New Patient
+                      </Button>
+                    </div>
+                  </div>
                   <select
                     value={selectedPatientId}
                     onChange={(e) => setSelectedPatientId(e.target.value)}
@@ -348,6 +510,118 @@ export function StaffDashboard() {
           )}
         </div>
       </div>
+
+      <Modal isOpen={isAddPatientModalOpen} onClose={() => setIsAddPatientModalOpen(false)} title="Add New Patient">
+        <form onSubmit={handleAddPatient} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+            <input
+              type="text"
+              required
+              value={newPatientData.name}
+              onChange={(e) => setNewPatientData({ ...newPatientData, name: e.target.value })}
+              className="w-full rounded-md border border-gray-300 p-2 text-sm focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              required
+              value={newPatientData.email}
+              onChange={(e) => setNewPatientData({ ...newPatientData, email: e.target.value })}
+              className="w-full rounded-md border border-gray-300 p-2 text-sm focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+            <input
+              type="tel"
+              required
+              value={newPatientData.phone}
+              onChange={(e) => setNewPatientData({ ...newPatientData, phone: e.target.value })}
+              className="w-full rounded-md border border-gray-300 p-2 text-sm focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Aadhar Number <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              required
+              value={newPatientData.aadharNumber}
+              onChange={(e) => setNewPatientData({ ...newPatientData, aadharNumber: e.target.value })}
+              className="w-full rounded-md border border-gray-300 p-2 text-sm focus:ring-2 focus:ring-teal-500"
+              placeholder="12-digit Aadhar Number"
+              pattern="\d{12}"
+              title="Aadhar number must be exactly 12 digits"
+            />
+          </div>
+          <div className="pt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setIsAddPatientModalOpen(false)}>Cancel</Button>
+            <Button type="submit">Add Patient</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={isEditPatientModalOpen} onClose={() => setIsEditPatientModalOpen(false)} title="Edit Patient">
+        <form onSubmit={handleUpdatePatient} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+            <input
+              type="text"
+              required
+              value={editPatientData.name}
+              onChange={(e) => setEditPatientData({ ...editPatientData, name: e.target.value })}
+              className="w-full rounded-md border border-gray-300 p-2 text-sm focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              required
+              value={editPatientData.email}
+              onChange={(e) => setEditPatientData({ ...editPatientData, email: e.target.value })}
+              className="w-full rounded-md border border-gray-300 p-2 text-sm focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+            <input
+              type="tel"
+              required
+              value={editPatientData.phone}
+              onChange={(e) => setEditPatientData({ ...editPatientData, phone: e.target.value })}
+              className="w-full rounded-md border border-gray-300 p-2 text-sm focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+            <input
+              type="text"
+              value={editPatientData.address}
+              onChange={(e) => setEditPatientData({ ...editPatientData, address: e.target.value })}
+              className="w-full rounded-md border border-gray-300 p-2 text-sm focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Aadhar Number</label>
+            <input
+              type="text"
+              value={editPatientData.aadharNumber}
+              onChange={(e) => setEditPatientData({ ...editPatientData, aadharNumber: e.target.value })}
+              className="w-full rounded-md border border-gray-300 p-2 text-sm focus:ring-2 focus:ring-teal-500"
+              placeholder="12-digit Aadhar Number"
+              pattern="\d{12}"
+              title="Aadhar number must be exactly 12 digits"
+            />
+          </div>
+          <div className="pt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setIsEditPatientModalOpen(false)}>Cancel</Button>
+            <Button type="submit">Save Changes</Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
